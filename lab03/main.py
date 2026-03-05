@@ -4,9 +4,6 @@ import numpy as np
 import random
 import math
 
-# ============================================================================
-# КОНСТАНТЫ
-# ============================================================================
 
 # Состояния клеток
 EMPTY = 0
@@ -20,7 +17,7 @@ ROCK = 7
 BURNED = 8
 GRASS = 9
 
-# Цвета (RGB)
+# Цвета (RGB) для отрисовки
 COLORS = [
     (210, 180, 140),  # EMPTY
     (143, 188, 143),  # TREE_YOUNG
@@ -41,27 +38,30 @@ class ForestFireModel:
     def __init__(self, width, height):
         self.width = width
         self.height = height
-        self.grid = np.zeros((height, width), dtype=np.uint8)
-        self.elevation = np.zeros((height, width))
-        self.moisture = np.zeros((height, width))
-        self.burned_timer = np.zeros((height, width), dtype=np.uint8)
-        self.generation = 0
+        self.grid = np.zeros((height, width), dtype=np.uint8)  # Основная сетка
+        self.elevation = np.zeros((height, width))  # Высота для ландшафта
+        self.moisture = np.zeros((height, width))  # Влажность каждой клетки
+        self.burned_timer = np.zeros((height, width), dtype=np.uint8)  # Таймер восстановления
+        self.generation = 0  # Счётчик поколений
 
     def generate_terrain(self):
-        """Генерация ландшафта"""
+        """Генерация ландшафта и влажности"""
         for y in range(self.height):
             for x in range(self.width):
+                # Нормализованные координаты для шума
                 nx = x / self.width * 4
                 ny = y / self.height * 4
+                # Генерация высоты через комбинацию синусов
                 self.elevation[y, x] = (
                         math.sin(nx) * math.cos(ny) * 0.5 +
                         math.sin(nx * 2.5 + 1) * math.cos(ny * 2.5) * 0.25 +
                         random.uniform(-0.1, 0.1)
                 )
+                # Случайная влажность для каждой клетки
                 self.moisture[y, x] = random.uniform(0.3, 0.9)
 
     def initialize_forest(self):
-        """Инициализация леса"""
+        """Создание начального состояния леса"""
         self.generate_terrain()
 
         for y in range(self.height):
@@ -70,13 +70,15 @@ class ForestFireModel:
                 moist = self.moisture[y, x]
                 rand = random.random()
 
+                # Распределение по типу местности
                 if elev < -0.4:
-                    self.grid[y, x] = WATER
+                    self.grid[y, x] = WATER  # Вода в низинах
                 elif elev > 0.5 and rand < 0.3:
-                    self.grid[y, x] = ROCK
+                    self.grid[y, x] = ROCK  # Скалы на возвышенностях
                 elif rand < 0.05:
-                    self.grid[y, x] = GRASS
+                    self.grid[y, x] = GRASS  # Трава
                 elif rand < 0.65:
+                    # Распределение деревьев по возрасту
                     if moist > 0.7:
                         age_rand = random.random()
                         if age_rand < 0.3:
@@ -88,20 +90,23 @@ class ForestFireModel:
                     else:
                         self.grid[y, x] = TREE_YOUNG if random.random() < 0.7 else TREE_MATURE
                 else:
-                    self.grid[y, x] = EMPTY
+                    self.grid[y, x] = EMPTY  # Пустая земля
 
     def update(self, prob_lightning, prob_growth, prob_spread, prob_extinguish):
-        """Обновление модели"""
+        """Основной шаг симуляции"""
         for y in range(self.height):
             for x in range(self.width):
                 current = self.grid[y, x]
 
+                # Горящая клетка сгорает и становится пеплом
                 if current in [BURNING_LOW, BURNING_HIGH]:
                     if random.random() < 0.3:
                         self.grid[y, x] = BURNED
-                        self.burned_timer[y, x] = 20
+                        self.burned_timer[y, x] = 20  # Время восстановления
 
+                # Дерево может загореться
                 elif current in [TREE_YOUNG, TREE_MATURE, TREE_OLD]:
+                    # Подсчёт горящих соседей (8 направлений)
                     burning_count = 0
                     for dy in [-1, 0, 1]:
                         for dx in [-1, 0, 1]:
@@ -113,26 +118,32 @@ class ForestFireModel:
                                     burning_count += 1
 
                     if burning_count > 0:
+                        # Влажность снижает вероятность распространения
                         moist = self.moisture[y, x]
                         spread_prob = prob_spread * (1.0 - (moist - 0.3) * 0.5)
+                        # Больше горящих соседей — выше шанс и интенсивность
                         if burning_count >= 3:
                             spread_prob *= 1.5
 
                         if random.random() < spread_prob:
                             self.grid[y, x] = BURNING_HIGH if burning_count >= 3 else BURNING_LOW
 
+                    # Спонтанное возгорание от молнии
                     elif random.random() < prob_lightning:
                         self.grid[y, x] = BURNING_LOW
 
+                # Рост растительности на пустой земле
                 elif current == EMPTY:
                     if random.random() < prob_growth:
                         self.grid[y, x] = GRASS if random.random() < 0.3 else TREE_YOUNG
 
+                # Восстановление после пожара
                 elif current == BURNED:
                     self.burned_timer[y, x] -= 1
                     if self.burned_timer[y, x] <= 0:
                         self.grid[y, x] = EMPTY
 
+                # Трава превращается в дерево
                 elif current == GRASS:
                     if random.random() < prob_growth * 0.5:
                         self.grid[y, x] = TREE_YOUNG
@@ -140,7 +151,7 @@ class ForestFireModel:
         self.generation += 1
 
     def get_stats(self):
-        """Получение статистики"""
+        """Подсчёт статистики"""
         return {
             'trees': int(np.sum((self.grid >= TREE_YOUNG) & (self.grid <= TREE_OLD))),
             'burning': int(np.sum((self.grid == BURNING_LOW) | (self.grid == BURNING_HIGH))),
@@ -150,16 +161,17 @@ class ForestFireModel:
         }
 
     def add_water(self, x, y, size=3):
-        """Добавление воды - ИСПРАВЛЕНО"""
+        """Создание водоёма по клику"""
         for dy in range(-size, size + 1):
             for dx in range(-size, size + 1):
+                # Круглая область воздействия
                 if dx * dx + dy * dy <= size * size:
                     nx, ny = x + dx, y + dy
                     if 0 <= nx < self.width and 0 <= ny < self.height:
                         self.grid[ny, nx] = WATER
 
     def extinguish(self, x, y, radius=4):
-        """Тушение пожара - ИСПРАВЛЕНО"""
+        """Тушение пожара в радиусе"""
         for dy in range(-radius, radius + 1):
             for dx in range(-radius, radius + 1):
                 if dx * dx + dy * dy <= radius * radius:
@@ -170,7 +182,7 @@ class ForestFireModel:
 
 
 class ForestFireApp:
-    """Приложение"""
+    """Графическое приложение"""
 
     def __init__(self):
         self.root = tk.Tk()
@@ -178,21 +190,21 @@ class ForestFireApp:
         self.root.configure(bg='#1a1a2e')
         self.root.resizable(False, False)
 
-        # Параметры
+        # Параметры отрисовки
         self.cell_size = 6
         self.grid_width = 70
         self.grid_height = 50
         self.fps = 20
 
-        # Модель
+        # Инициализация модели
         self.model = ForestFireModel(self.grid_width, self.grid_height)
         self.model.initialize_forest()
 
-        # Управление - ИСПРАВЛЕНО: используем простые строки
+        # Состояние приложения
         self.paused = False
-        self.current_mode = 'view'  # 'view', 'water', 'extinguish'
+        self.current_mode = 'view'
 
-        # Переменные ползунков
+        # Параметры симуляции
         self.prob_lightning = tk.DoubleVar(value=0.0001)
         self.prob_growth = tk.DoubleVar(value=0.01)
         self.prob_spread = tk.DoubleVar(value=0.7)
@@ -202,11 +214,11 @@ class ForestFireApp:
         self.draw_simulation()
 
     def setup_ui(self):
-        """Настройка интерфейса"""
+        """Создание интерфейса"""
         main_frame = tk.Frame(self.root, bg='#1a1a2e')
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Холст - ИСПРАВЛЕНО: корректная привязка клика
+        # Холст для отрисовки карты
         canvas_width = self.grid_width * self.cell_size
         canvas_height = self.grid_height * self.cell_size
 
@@ -220,14 +232,13 @@ class ForestFireApp:
             cursor='crosshair'
         )
         self.canvas.pack(side=tk.TOP, pady=(0, 10))
-        # Привязываем клик к методу с правильным обработчиком
         self.canvas.bind('<Button-1>', self.on_canvas_click)
 
         # Панель управления
         control_frame = tk.Frame(main_frame, bg='#16213e')
         control_frame.pack(fill=tk.X, pady=5)
 
-        # Статистика
+        # Блок статистики
         stats_frame = tk.LabelFrame(control_frame, text="Статистика",
                                     bg='#16213e', fg='#e0e0e0', font=('Arial', 10, 'bold'))
         stats_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=5)
@@ -241,7 +252,7 @@ class ForestFireApp:
             lbl.pack(fill=tk.X, padx=5, pady=1)
             self.stats_labels[key] = lbl
 
-        # Ползунки
+        # Ползунки параметров
         sliders_frame = tk.LabelFrame(control_frame, text="Параметры",
                                       bg='#16213e', fg='#e0e0e0', font=('Arial', 10, 'bold'))
         sliders_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=5)
@@ -272,7 +283,7 @@ class ForestFireApp:
             slider.configure(command=lambda v, l=value_lbl: l.configure(text=f"{float(v):.4f}"))
             self.slider_labels[var_name] = value_lbl
 
-        # Кнопки
+        # Кнопки управления
         buttons_frame = tk.LabelFrame(control_frame, text="Управление",
                                       bg='#16213e', fg='#e0e0e0', font=('Arial', 10, 'bold'))
         buttons_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=5)
@@ -285,12 +296,11 @@ class ForestFireApp:
 
         tk.Button(buttons_frame, text="Перезапуск", command=self.restart_simulation, **btn_config).pack(pady=2)
 
-        # Режимы - ИСПРАВЛЕНО: корректное переключение
+        # Переключатели режимов
         mode_frame = tk.LabelFrame(buttons_frame, text="Режим", bg='#16213e',
                                    fg='#e0e0e0', font=('Arial', 9))
         mode_frame.pack(pady=5)
 
-        # Используем отдельные переменные для радиокнопок
         self.mode_var = tk.StringVar(value='view')
 
         tk.Radiobutton(mode_frame, text="Просмотр", variable=self.mode_var, value='view',
@@ -308,7 +318,7 @@ class ForestFireApp:
                        activebackground='#16213e', activeforeground='#e0e0e0',
                        command=self.update_mode).pack(anchor='w')
 
-        # Информация
+        # Информационный блок
         info_frame = tk.LabelFrame(control_frame, text="Инфо", bg='#16213e',
                                    fg='#e0e0e0', font=('Arial', 10, 'bold'))
         info_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=5)
@@ -331,12 +341,12 @@ class ForestFireApp:
         self.mode_label.pack(pady=5)
 
     def update_mode(self):
-        """Обновление текущего режима - ИСПРАВЛЕНО"""
+        """Обновление режима взаимодействия"""
         self.current_mode = self.mode_var.get()
         mode_names = {'view': 'Просмотр', 'water': 'Добавить воду', 'extinguish': 'Тушить огонь'}
         self.mode_label.configure(text=f"Режим: {mode_names.get(self.current_mode, 'Просмотр')}")
 
-        # Меняем курсор в зависимости от режима
+        # Визуальная индикация режима курсором
         if self.current_mode == 'water':
             self.canvas.configure(cursor='boat')
         elif self.current_mode == 'extinguish':
@@ -345,7 +355,7 @@ class ForestFireApp:
             self.canvas.configure(cursor='crosshair')
 
     def draw_simulation(self):
-        """Отрисовка симуляции"""
+        """Отрисовка карты"""
         self.canvas.delete('all')
 
         for y in range(self.model.height):
@@ -353,6 +363,7 @@ class ForestFireApp:
                 state = self.model.grid[y, x]
                 color = COLORS[state]
 
+                # Вариация цвета для естественности деревьев
                 if state in [TREE_YOUNG, TREE_MATURE, TREE_OLD]:
                     variation = (x + y) % 10 - 5
                     r = max(0, min(255, color[0] + variation))
@@ -368,7 +379,7 @@ class ForestFireApp:
                                              y1 + self.cell_size, fill=color, outline='')
 
     def update_stats(self):
-        """Обновление статистики"""
+        """Обновление отображения статистики"""
         stats = self.model.get_stats()
         self.stats_labels['generation'].configure(text=f"Поколение: {self.model.generation}")
         self.stats_labels['trees'].configure(text=f"Деревья: {stats['trees']}")
@@ -378,7 +389,7 @@ class ForestFireApp:
         self.stats_labels['burned'].configure(text=f"Пепел: {stats['burned']}")
 
     def update_simulation(self):
-        """Обновление симуляции"""
+        """Игровой цикл"""
         if not self.paused:
             self.model.update(
                 self.prob_lightning.get(),
@@ -392,24 +403,23 @@ class ForestFireApp:
         self.root.after(1000 // self.fps, self.update_simulation)
 
     def toggle_pause(self):
-        """Пауза"""
+        """Переключение паузы"""
         self.paused = not self.paused
         self.pause_btn.configure(text="Продолжить" if self.paused else "Пауза")
 
     def restart_simulation(self):
-        """Перезапуск"""
+        """Перезапуск симуляции"""
         self.model = ForestFireModel(self.grid_width, self.grid_height)
         self.model.initialize_forest()
         self.draw_simulation()
         self.update_stats()
 
     def on_canvas_click(self, event):
-        """Обработка клика по карте - ИСПРАВЛЕНО"""
-        # Корректный расчет координат клетки
+        """Обработка клика по карте"""
+        # Перевод координат мыши в координаты сетки
         x = event.x // self.cell_size
         y = event.y // self.cell_size
 
-        # Проверка границ
         if 0 <= x < self.model.width and 0 <= y < self.model.height:
             if self.current_mode == 'water':
                 self.model.add_water(x, y, size=3)
@@ -419,7 +429,6 @@ class ForestFireApp:
                 self.model.extinguish(x, y, radius=4)
                 self.draw_simulation()
                 self.update_stats()
-            # В режиме 'view' ничего не делаем при клике
 
     def run(self):
         """Запуск приложения"""
@@ -428,6 +437,5 @@ class ForestFireApp:
 
 
 if __name__ == "__main__":
-
     app = ForestFireApp()
     app.run()
