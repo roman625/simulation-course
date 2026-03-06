@@ -1,334 +1,388 @@
 # Лабораторная работа №3 ДЕТАЛЬНЫЙ РАЗБОР ВСЕХ ПРАВИЛ
 ## С кодом и пояснениями
 
----
 
-## ПРАВИЛО 1: Горящая клетка становится пустой (пеплом)
+
+## 1. Основные состояния клеток
 
 ```python
-# В методе update() класса ForestFireModel:
-
-if current in [BURNING_LOW, BURNING_HIGH]:
-    if random.random() < 0.3:  # 30% шанс сгореть за один кадр
-        self.grid[y, x] = BURNED  # Клетка становится пеплом
-        self.burned_timer[y, x] = 20  # Таймер восстановления на 20 кадров
+# Файл: ForestFireModel, глобальные константы
+EMPTY = 0        # Пустая земля
+TREE_YOUNG = 1   # Молодое дерево
+TREE_MATURE = 2  # Зрелое дерево
+TREE_OLD = 3     # Старое дерево
+BURNING_LOW = 4  # Слабое горение
+BURNING_HIGH = 5 # Сильное горение
+WATER = 6        # Вода
+ROCK = 7         # Скала
+BURNED = 8       # Пепел
+GRASS = 9        # Трава
 ```
-
-**Как работает:**
-```
-Кадр 1:  Горящее дерево
-   ↓ (30% шанс)
-Кадр 2:  Пепел (таймер = 20)
-   ↓ (каждый кадр -1)
-Кадр 22:  Пустая земля (таймер = 0)
-```
-
-**Почему 30%:** Огонь не сжигает дерево мгновенно, нужно время.
 
 ---
 
-## ПРАВИЛО 2: Дерево загорается от соседних горящих клеток
+## 2. Правило: Возгорание дерева от соседей
 
-```python
-# Подсчёт горящих соседей:
-def count_burning_neighbors(self, x, y):
-    burning_count = 0
-    for dy in [-1, 0, 1]:
-        for dx in [-1, 0, 1]:
-            if dx == 0 and dy == 0:
-                continue  # Не считаем саму клетку
-            
-            ny, nx = y + dy, x + dx
-            if 0 <= ny < self.height and 0 <= nx < self.width:
-                if self.grid[ny, nx] in [BURNING_LOW, BURNING_HIGH]:
-                    burning_count += 1
-    
-    return burning_count
-
-# Применение в update():
-elif current in [TREE_YOUNG, TREE_MATURE, TREE_OLD]:
-    burning_count = self.count_burning_neighbors(x, y)
-    
-    if burning_count > 0:
-        moist = self.moisture[y, x]
-        spread_prob = prob_spread * (1.0 - (moist - 0.3) * 0.5)
-        
-        if burning_count >= 3:
-            spread_prob *= 1.5  # Больше соседей = выше шанс
-        
-        if random.random() < spread_prob:
-            self.grid[y, x] = BURNING_HIGH if burning_count >= 3 else BURNING_LOW
+### Формула
+```
+Шанс возгорания = prob_spread × (1.0 - (влажность - 0.3) × 0.5) × модификатор_возраста × бонус_соседей
 ```
 
+### Привязка к коду
+Метод: `ForestFireModel.update()` 
+
+```python
+# Шаг 1: Определение модификатора по возрасту 
+age_modifier = 1.0
+if current == TREE_YOUNG:
+    age_modifier = 0.7   # молодые труднее загораются
+elif current == TREE_OLD:
+    age_modifier = 1.4   # старые легче загораются
+
+# Шаг 2: Подсчёт горящих соседей
+burning_count = 0
+for dy in [-1, 0, 1]:
+    for dx in [-1, 0, 1]:
+        if dx == 0 and dy == 0:
+            continue
+        ny, nx = y + dy, x + dx
+        if 0 <= ny < self.height and 0 <= nx < self.width:
+            if self.grid[ny, nx] in [BURNING_LOW, BURNING_HIGH]:
+                burning_count += 1
+
+# Шаг 3: Расчёт итоговой вероятности 
+if burning_count > 0:
+    moist = self.moisture[y, x]
+    # Формула: базовый шанс × влияние влажности × возраст
+    spread_prob = prob_spread * (1.0 - (moist - 0.3) * 0.5) * age_modifier
+    
+    # Бонус за количество горящих соседей
+    if burning_count >= 3:
+        spread_prob *= 1.5
+    
+    # Проверка шанса
+    if random.random() < spread_prob:
+        self.grid[y, x] = BURNING_HIGH if burning_count >= 3 else BURNING_LOW
+```
+
+### Пример расчёта
+```
+Входные данные:
+- prob_spread = 0.7
+- moisture = 0.6
+- дерево зрелое (age_modifier = 1.0)
+- burning_count = 2
+
+Расчёт:
+1. Влияние влажности: 1.0 - (0.6 - 0.3) * 0.5 = 0.85
+2. Базовый шанс: 0.7 * 0.85 * 1.0 = 0.595
+3. Бонус соседей: не применяется (2 < 3)
+4. Итог: 0.595 (59.5%)
+
+Проверка: random.random() < 0.595 → возгорание
+```
 
 ---
 
-## ПРАВИЛО 3: Молния (спонтанное возгорание)
+## 3. Правило: Возгорание от молнии
+
+### Формула
+```
+Шанс = prob_lightning × модификатор_возраста
+```
+
+### Привязка к коду
+Метод: `ForestFireModel.update()` 
 
 ```python
-# В update(), если нет горящих соседей:
-elif current in [TREE_YOUNG, TREE_MATURE, TREE_OLD]:
-    burning_count = self.count_burning_neighbors(x, y)
-    
-    if burning_count > 0:
-        # ... правило 2 (от соседей)
-    
-    # ПРАВИЛО 3: Молния
-    elif random.random() < prob_lightning:
+# Проверка базового шанса молнии
+elif random.random() < prob_lightning:
+    # Дополнительная проверка с учётом возраста дерева
+    if random.random() < age_modifier:
         self.grid[y, x] = BURNING_LOW
-        #                    ^^^^^^^^^^^^
-        #              Начинается со слабого горения
 ```
 
-**Как настроить:**
-```python
-# В интерфейсе:
-self.prob_lightning = tk.DoubleVar(value=0.0001)  # По умолчанию
-
-# Ползунок от 0.0 до 0.01:
-('prob_lightning', 'Молния', 0.0, 0.01, 0.0001)
-```
-
-**Что означает 0.0001:**
-- 0.01% шанс каждый кадр
-- На карте 3500 клеток → примерно 1 удар молнии каждые 300 кадров
-- При 20 FPS → примерно 1 удар каждые 15 секунд
+### Таблица значений
+| Возраст | age_modifier | Итоговый шанс при prob_lightning=0.0001 |
+|---------|-------------|----------------------------------------|
+| Молодое | 0.7 | 0.00007 |
+| Зрелое | 1.0 | 0.0001 |
+| Старое | 1.4 | 0.00014 |
 
 ---
 
-## ПРАВИЛО 4: Рост деревьев на пустых клетках
+## 4. Правило: Рост и старение деревьев
+
+### Формулы перехода
+```
+EMPTY → TREE_YOUNG/GRASS:     вероятность = prob_growth
+GRASS → TREE_YOUNG:           вероятность = prob_growth × 0.5
+TREE_YOUNG → TREE_MATURE:     вероятность = prob_growth × 0.8
+TREE_MATURE → TREE_OLD:       вероятность = prob_growth × 0.6
+TREE_OLD → EMPTY:             вероятность = prob_growth × 0.05
+```
+
+### Привязка к коду
+Метод: `ForestFireModel.update()` 
 
 ```python
-# В update():
+# Механика взросления деревьев 
+if current == TREE_YOUNG and random.random() < prob_growth * 0.8:
+    self.grid[y, x] = TREE_MATURE
+elif current == TREE_MATURE and random.random() < prob_growth * 0.6:
+    self.grid[y, x] = TREE_OLD
+elif current == TREE_OLD and random.random() < prob_growth * 0.05:
+    self.grid[y, x] = EMPTY  # естественная смерть дерева
+
+# Рост на пустой земле 
 elif current == EMPTY:
     if random.random() < prob_growth:
         self.grid[y, x] = GRASS if random.random() < 0.3 else TREE_YOUNG
-        #                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        #                    30% трава, 70% молодое дерево
 
+# Превращение травы в дерево 
 elif current == GRASS:
     if random.random() < prob_growth * 0.5:
         self.grid[y, x] = TREE_YOUNG
-        #                    ^^^^^^^^^^^^
-        #                    Трава превращается в дерево
-```
-
-**Жизненный цикл:**
-```
- EMPTY (пустая земля)
-   ↓ (prob_growth = 1%)
- GRASS (трава)
-   ↓ (prob_growth * 0.5 = 0.5%)
- TREE_YOUNG (молодое дерево)
-   ↓ (старение в генерации)
- TREE_MATURE (зрелое дерево)
-   ↓
- TREE_OLD (старое дерево)
 ```
 
 ---
 
-## ПРАВИЛО 5: Тушение пожара (ручное)
+## 5. Правило: Сгорание и восстановление
 
-```python
-# Метод тушения в классе ForestFireModel:
-def extinguish(self, x, y, radius=4):
-    """Тушение пожара в радиусе от клика"""
-    for dy in range(-radius, radius + 1):
-        for dx in range(-radius, radius + 1):
-            # Проверяем что точка внутри круга:
-            if dx*dx + dy*dy <= radius*radius:
-                nx, ny = x + dx, y + dy
-                
-                # Проверка границ карты:
-                if 0 <= nx < self.width and 0 <= ny < self.height:
-                    # Тушим только горящие клетки:
-                    if self.grid[ny, nx] in [BURNING_LOW, BURNING_HIGH]:
-                        self.grid[ny, nx] = BURNED
-                        #                    ^^^^^
-                        #              Превращаем в пепел
+### Формулы
+```
+Горящее дерево → Пепел: вероятность = 0.3 за шаг
+Пепел → Пустая земля: после 20 шагов таймера
 ```
 
-**Как вызывается:**
+### Привязка к коду
+Метод: `ForestFireModel.update()` 
+
 ```python
-# В обработчике клика:
-def on_canvas_click(self, event):
-    x = event.x // self.cell_size  # Координата X клетки
-    y = event.y // self.cell_size  # Координата Y клетки
-    
-    if 0 <= x < self.model.width and 0 <= y < self.model.height:
-        if self.current_mode == 'extinguish':
-            self.model.extinguish(x, y, radius=4)  # Вызов тушения
-            self.draw_simulation()
-            self.update_stats()
+# Обработка горящих клеток 
+if current in [BURNING_LOW, BURNING_HIGH]:
+    if random.random() < 0.3:  # 30% шанс сгорания за шаг
+        self.grid[y, x] = BURNED
+        self.burned_timer[y, x] = 20  # установка таймера восстановления
+
+# Восстановление после пожара 
+elif current == BURNED:
+    self.burned_timer[y, x] -= 1
+    if self.burned_timer[y, x] <= 0:
+        self.grid[y, x] = EMPTY  # земля готова к новому росту
 ```
 
+---
 
+## 6. Правило: Генерация ландшафта
 
-## ПРАВИЛО 6: Добавление воды (создание барьера)
+### Формула высоты
+```
+высота = sin(x_norm × 4) × cos(y_norm × 4) × 0.5 + 
+         sin(x_norm × 10 + 1) × cos(y_norm × 10) × 0.25 + 
+         случайное_значение_от_-0.1_до_0.1
+```
+
+### Привязка к коду
+Метод: `ForestFireModel.generate_terrain()` 
+```python
+# Нормализация координат
+nx = x / self.width * 4
+ny = y / self.height * 4
+
+# Расчёт высоты через комбинацию синусов и косинусов
+self.elevation[y, x] = (
+    math.sin(nx) * math.cos(ny) * 0.5 +
+    math.sin(nx * 2.5 + 1) * math.cos(ny * 2.5) * 0.25 +
+    random.uniform(-0.1, 0.1)  # добавление шума
+)
+
+# Генерация влажности (строка ~83)
+self.moisture[y, x] = random.uniform(0.3, 0.9)
+```
+
+### Распределение типов местности
+Метод: `ForestFireModel.initialize_forest()` 
 
 ```python
-# Метод добавления воды:
+if elev < -0.4:
+    self.grid[y, x] = WATER  # вода в низинах
+elif elev > 0.5 and rand < 0.3:
+    self.grid[y, x] = ROCK   # скалы на возвышенностях
+elif rand < 0.05:
+    self.grid[y, x] = GRASS  # трава
+elif rand < 0.65:
+    # распределение деревьев с учётом влажности
+    ...
+```
+
+---
+
+## 7. Правило: Пользовательское взаимодействие
+
+### Добавление воды
+Формула проверки круга: `(dx)^2 + (dy)^2 <= radius^2`
+
+Привязка к коду: Метод `ForestFireModel.add_water()` 
+
+```python
 def add_water(self, x, y, size=3):
-    """Создание водоёма в месте клика"""
     for dy in range(-size, size + 1):
         for dx in range(-size, size + 1):
-            # Круглая форма водоёма:
-            if dx*dx + dy*dy <= size*size:
+            # Проверка попадания в круг
+            if dx * dx + dy * dy <= size * size:
                 nx, ny = x + dx, y + dy
-                
                 if 0 <= nx < self.width and 0 <= ny < self.height:
                     self.grid[ny, nx] = WATER
-                    #                    ^^^^^
-                    #              Любая клетка становится водой
 ```
 
-**Как работает барьер:**
-```python
-# В update() НЕТ обработки для WATER:
-if current in [BURNING_LOW, BURNING_HIGH]:
-    # горит
-elif current in [TREE_YOUNG, TREE_MATURE, TREE_OLD]:
-    # может загореться
-elif current == EMPTY:
-    # растёт
-# WATER и ROCK просто пропускаются!
-
-# Вода не может загореться → огонь останавливается
-```
-
-
-
-## ПРАВИЛО 7: Влажность влияет на распространение
+### Тушение пожара
+Привязка к коду: Метод `ForestFireModel.extinguish()` 
 
 ```python
-# Генерация влажности при создании карты:
-def generate_terrain(self):
-    for y in range(self.height):
-        for x in range(self.width):
-            self.moisture[y, x] = random.uniform(0.3, 0.9)
-            #                                      ^^^^^^^^^^
-            #                            Каждая клетка имеет свою влажность
-
-# Использование в распространении огня:
-moist = self.moisture[y, x]  # Получаем влажность клетки
-spread_prob = prob_spread * (1.0 - (moist - 0.3) * 0.5)
-#                                ^^^^^^^^^^^^^^^^^^^^^^^^
-#                      Формула расчёта влияния влажности
-```
-
-**Расчёт для разных значений:**
-
-| Влажность | Формула | Итоговый множитель |
-|-----------|---------|-------------------|
-| 0.3 (сухо) | `1.0 - (0.3 - 0.3) * 0.5` | 1.0 (100%) |
-| 0.5 (средне) | `1.0 - (0.5 - 0.3) * 0.5` | 0.9 (90%) |
-| 0.7 (влажно) | `1.0 - (0.7 - 0.3) * 0.5` | 0.8 (80%) |
-| 0.9 (мокро) | `1.0 - (0.9 - 0.3) * 0.5` | 0.7 (70%) |
-
-**Пример:**
-```python
-prob_spread = 0.7  # Базовое значение ползунка
-
-# Сухая клетка (0.3):
-spread_prob = 0.7 * 1.0 = 0.70  # 70% шанс
-
-# Мокрая клетка (0.9):
-spread_prob = 0.7 * 0.7 = 0.49  # 49% шанс
+def extinguish(self, x, y, radius=4):
+    for dy in range(-radius, radius + 1):
+        for dx in range(-radius, radius + 1):
+            if dx * dx + dy * dy <= radius * radius:
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < self.width and 0 <= ny < self.height:
+                    # Тушение только горящих клеток
+                    if self.grid[ny, nx] in [BURNING_LOW, BURNING_HIGH]:
+                        self.grid[ny, nx] = BURNED
 ```
 
 ---
 
-## ПРАВИЛО 8: Возраст дерева влияет на горение
+## 8. Правило: Сбор статистики
 
-```python
-# При генерации леса:
-if moist > 0.7:  # Во влажных местах
-    age_rand = random.random()
-    if age_rand < 0.3:
-        self.grid[y, x] = TREE_YOUNG    # 30% молодые
-    elif age_rand < 0.7:
-        self.grid[y, x] = TREE_MATURE   # 40% зрелые
-    else:
-        self.grid[y, x] = TREE_OLD      # 30% старые
-else:  # В сухих местах
-    self.grid[y, x] = TREE_YOUNG if random.random() < 0.7 else TREE_MATURE
-    #                                    ^^^^^^^^^^^^^^^^^^^^
-    #                            70% молодые, 30% зрелые, 0% старых
-
-# В сухих местах НЕТ старых деревьев → меньше топлива для огня
+### Формулы подсчёта
+```
+Деревья:  сумма клеток со значениями от 1 до 3
+Горящие:  сумма клеток со значениями 4 или 5
+Вода:     сумма клеток со значением 6
+Трава:    сумма клеток со значением 9
+Пепел:    сумма клеток со значением 8
 ```
 
-**Почему так:**
-| Тип дерева | Влажность | Горение |
-|------------|-----------|---------|
-| Молодое | Высокая | Медленное (больше влаги в стволе) |
-| Зрелое | Средняя | Нормальное |
-| Старое | Низкая | Быстрое (сухая древесина) |
+### Привязка к коду
+Метод: `ForestFireModel.get_stats()` 
+
+```python
+def get_stats(self):
+    return {
+        'trees': int(np.sum((self.grid >= TREE_YOUNG) & (self.grid <= TREE_OLD))),
+        'burning': int(np.sum((self.grid == BURNING_LOW) | (self.grid == BURNING_HIGH))),
+        'water': int(np.sum(self.grid == WATER)),
+        'grass': int(np.sum(self.grid == GRASS)),
+        'burned': int(np.sum(self.grid == BURNED)),
+    }
+```
+
+Обновление интерфейса: Метод `ForestFireApp.update_stats()`
+
+```python
+def update_stats(self):
+    stats = self.model.get_stats()
+    self.stats_labels['generation'].configure(text=f"Поколение: {self.model.generation}")
+    self.stats_labels['trees'].configure(text=f"Деревья: {stats['trees']}")
+    self.stats_labels['burning'].configure(text=f"Горит: {stats['burning']}")
+    # ... остальные метки
+```
 
 ---
 
-## ПРАВИЛО 9: Период восстановления после пожара
+## 9. Сводная таблица правил
+
+| Правило | Условие | Действие | Вероятность | 
+|---------|---------|----------|-------------|
+| Возгорание от соседа | Горящий сосед + дерево | Дерево загорается | prob_spread × влажность × возраст × соседи | 
+| Возгорание от молнии | Случайное событие | Дерево загорается | prob_lightning × возраст | 
+| Рост дерева | Пустая клетка | Появление растения | prob_growth | 
+| Старение дерева | Текущая стадия + шанс | Переход на следующую стадию | prob_growth × коэффициент |
+| Сгорание | Клетка горит | Превращение в пепел | 0.3 | 
+| Восстановление | Пепел + таймер = 0 | Превращение в пустую землю | 1.0 |
+| Добавление воды | Клик в режиме "вода" | Клетки становятся водой | 1.0 |
+| Тушение | Клик в режиме "тушение" | Горящие клетки гаснут | 1.0 | 
+
+---
+
+## 10. Алгоритм одного шага симуляции
+
+```
+Метод: ForestFireModel.update()
+
+Для каждой клетки (y, x) сетки:
+    1. Получить текущее состояние: current = self.grid[y, x]
+    
+    2. Обработка по типу состояния:
+    
+       Если current в [BURNING_LOW, BURNING_HIGH]:
+           - С вероятностью 0.3: установить BURNED и таймер = 20
+           
+       Если current в [TREE_YOUNG, TREE_MATURE, TREE_OLD]:
+           - Вычислить age_modifier по возрасту дерева
+           - Подсчитать burning_count (горящие соседи)
+           - Если burning_count > 0:
+               * Вычислить spread_prob по формуле
+               * С вероятностью spread_prob: установить BURNING_LOW/HIGH
+           - Иначе с вероятностью prob_lightning × age_modifier:
+               * Установить BURNING_LOW
+           - Обработать переходы между стадиями роста
+           
+       Если current == EMPTY:
+           - С вероятностью prob_growth: создать GRASS или TREE_YOUNG
+           
+       Если current == BURNED:
+           - Уменьшить таймер на 1
+           - Если таймер <= 0: установить EMPTY
+           
+       Если current == GRASS:
+           - С вероятностью prob_growth × 0.5: создать TREE_YOUNG
+    
+    3. Увеличить счётчик поколений: self.generation += 1
+```
+
+---
+
+## 11. Настройка параметров симуляции
+
+Параметры задаются в `ForestFireApp.__init__()` 
 
 ```python
-# Инициализация таймера:
-self.burned_timer = np.zeros((height, width), dtype=np.uint8)
+self.prob_lightning = tk.DoubleVar(value=0.0001)  # шанс молнии за шаг
+self.prob_growth = tk.DoubleVar(value=0.01)       # шанс роста растений
+self.prob_spread = tk.DoubleVar(value=0.7)        # базовый шанс распространения огня
+self.prob_extinguish = tk.DoubleVar(value=0.1)    # зарезервирован
+```
 
-# При сгорании:
-if current in [BURNING_LOW, BURNING_HIGH]:
-    if random.random() < 0.3:
-        self.grid[y, x] = BURNED
-        self.burned_timer[y, x] = 20  # 20 кадров
+Передача параметров в модель: Метод `ForestFireApp.update_simulation()`
 
-# Восстановление:
-elif current == BURNED:
-    self.burned_timer[y, x] -= 1  # Уменьшаем каждый кадр
-    if self.burned_timer[y, x] <= 0:
-        self.grid[y, x] = EMPTY  # Только теперь может расти дерево
+```python
+self.model.update(
+    self.prob_lightning.get(),
+    self.prob_growth.get(),
+    self.prob_spread.get(),
+    self.prob_extinguish.get()
+)
 ```
 
 
 
-## ПРАВИЛО 10: Интенсивность огня (слабое/сильное)
-
-```python
-# Определение интенсивности:
-if burning_count >= 3:
-    self.grid[y, x] = BURNING_HIGH  # Сильное горение (красный)
-    spread_prob *= 1.5  # Быстрее распространяется
-else:
-    self.grid[y, x] = BURNING_LOW   # Слабое горение (оранжевый)
-```
-
-**Разница:**
-| Параметр | BURNING_LOW | BURNING_HIGH |
-|----------|-------------|--------------|
-| Цвет | Оранжевый | Красный |
-| Соседей | 1-2 | 3+ |
-| Шанс распространения | Базовый | ×1.5 |
-| Визуально | оранжевый | красный |
-
 ---
 
-## СВОДНАЯ ТАБЛИЦА ВСЕХ ПРАВИЛ
+## 12. Заключение
 
-| № | Правило | Метод/Код | Эффект |
-|---|---------|-----------|--------|
-| 1 | Сгорание | `if current in [BURNING_LOW, BURNING_HIGH]` | 30% шанс → пепел |
-| 2 | От соседей | `count_burning_neighbors()` | 1+ сосед → может загореться |
-| 3 | Молния | `random() < prob_lightning` | Случайное возгорание |
-| 4 | Рост | `random() < prob_growth` | Пустая → трава/дерево |
-| 5 | Тушение | `extinguish(x, y, radius)` | Огонь → пепел |
-| 6 | Вода | `add_water(x, y, size)` | Создаёт барьер |
-| 7 | Влажность | `(1.0 - (moist - 0.3) * 0.5)` | Замедляет огонь |
-| 8 | Возраст | `TREE_YOUNG/MATURE/OLD` | Разная скорость горения |
-| 9 | Восстановление | `burned_timer -= 1` | 20 кадров пепла |
-| 10 | Интенсивность | `burning_count >= 3` | Слабое/сильное горение |
+Модель реализует следующие ключевые механизмы:
 
----
+1. **Вероятностное распространение огня** — формула учитывает влажность, возраст дерева и количество горящих соседей
 
+2. **Возрастная динамика леса** — деревья проходят стадии роста с разными коэффициентами вероятности 
 
+3. **Восстановление экосистемы** — сгоревшие клетки восстанавливаются через фиксированный таймер 
 
-**Каждое правило можно настроить через ползунки или клики!** 🎮
+4. **Генерация ландшафта** — высота и влажность определяются математическими функциями от координат 
 
+5. **Интерактивное управление** — пользователь может добавлять воду и тушить пожар кликом мыши 
+
+Все формулы сведены к линейным зависимостям для простоты понимания и настройки. Привязка к конкретным строкам кода позволяет быстро находить и модифицировать нужные правила.
 
