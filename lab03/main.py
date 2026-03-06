@@ -104,9 +104,27 @@ class ForestFireModel:
                         self.grid[y, x] = BURNED
                         self.burned_timer[y, x] = 20  # Время восстановления
 
-                # Дерево может загореться
+                #  Деревья: рост возраста и возгорание
                 elif current in [TREE_YOUNG, TREE_MATURE, TREE_OLD]:
-                    # Подсчёт горящих соседей (8 направлений)
+
+                    # <-- ДОБАВЛЕНО: Модификатор горения по возрасту
+                    age_modifier = 1.0
+                    if current == TREE_YOUNG:
+                        age_modifier = 0.7  # Молодые труднее загораются (больше влаги в стволе)
+                    elif current == TREE_MATURE:
+                        age_modifier = 1.0  # Нормальное горение
+                    elif current == TREE_OLD:
+                        age_modifier = 1.4  # Старые легче загораются (сухая древесина)
+
+                    # Механика взросления 
+                    if current == TREE_YOUNG and random.random() < prob_growth * 0.8:
+                        self.grid[y, x] = TREE_MATURE
+                    elif current == TREE_MATURE and random.random() < prob_growth * 0.6:
+                        self.grid[y, x] = TREE_OLD
+                    elif current == TREE_OLD and random.random() < prob_growth * 0.05:
+                        self.grid[y, x] = EMPTY
+
+                    # Подсчёт горящих соседей
                     burning_count = 0
                     for dy in [-1, 0, 1]:
                         for dx in [-1, 0, 1]:
@@ -118,19 +136,19 @@ class ForestFireModel:
                                     burning_count += 1
 
                     if burning_count > 0:
-                        # Влажность снижает вероятность распространения
                         moist = self.moisture[y, x]
-                        spread_prob = prob_spread * (1.0 - (moist - 0.3) * 0.5)
-                        # Больше горящих соседей — выше шанс и интенсивность
+                        spread_prob = prob_spread * (1.0 - (moist - 0.3) * 0.5) * age_modifier
                         if burning_count >= 3:
                             spread_prob *= 1.5
 
                         if random.random() < spread_prob:
                             self.grid[y, x] = BURNING_HIGH if burning_count >= 3 else BURNING_LOW
 
-                    # Спонтанное возгорание от молнии
                     elif random.random() < prob_lightning:
-                        self.grid[y, x] = BURNING_LOW
+                        #  Для молнии тоже учитываем возраст
+                        if random.random() < age_modifier:  # Старые чаще от молнии
+                            self.grid[y, x] = BURNING_LOW
+                    # Спонтанное возгорание от молнии
 
                 # Рост растительности на пустой земле
                 elif current == EMPTY:
