@@ -3,15 +3,19 @@ from tkinter import font as tkfont
 import random
 import time
 
-
 class SimpleLCG:
     def __init__(self, seed=None):
+        # Начальные данные согласно заданию
         self.state = seed if seed else int(time.time())
+        self.m = 2**32
+        self.a = 1664525
+        self.c = 1
 
     def next(self):
-        self.state = (1103515245 * self.state + 12345) & 0x7FFFFFFF
-        return self.state / 2147483648.0
-
+        # Классическая формула ЛЦГ
+        self.state = (self.a * self.state + self.c) % self.m
+        # Приведение к интервалу [0, 1]
+        return self.state / self.m
 
 class MysticBallApp:
     def __init__(self, root):
@@ -54,7 +58,6 @@ class MysticBallApp:
             color = f"#{max(0, int(15 - i * 10 / 750)):02x}{max(0, int(12 - i * 8 / 750)):02x}{max(0, int(41 - i * 20 / 750)):02x}"
             self.canvas_bg.create_line(0, i, 450, i, fill=color)
 
-        # Переключатель режимов
         self.frame_modes = tk.Frame(self.root, bg=self.color_bg)
         self.frame_modes.pack(pady=(20, 10))
 
@@ -66,7 +69,6 @@ class MysticBallApp:
                                     relief=tk.FLAT, font=self.font_btn, width=10, bg=self.color_acc, fg=self.color_bg)
         self.btn_mode_2.pack(side=tk.LEFT, padx=5)
 
-        # Поле для ввода вопроса
         tk.Label(self.root, text="ВВЕДИТЕ ВАШ ВОПРОС:", font=("Arial", 8, "bold"), fg=self.color_acc,
                  bg=self.color_bg).pack(pady=(10, 0))
         self.question_entry = tk.Entry(self.root, font=("Arial", 12), bg="#1a1a3a", fg="white",
@@ -123,7 +125,6 @@ class MysticBallApp:
     def ball_logic(self):
         question = self.question_entry.get().lower()
 
-        # --- ПАСХАЛКА ---
         if "радмир ренатович" in question:
             answer = "БЕССУМНЕННО ДА" if self.mode == "magic" else "ДА"
         else:
@@ -145,7 +146,6 @@ class MysticBallApp:
         for i, col in enumerate(colors):
             self.root.after(i * 150, lambda c=col: self.pred_text.config(fg=c))
         self.pred_text.config(state=tk.DISABLED)
-
 
 if __name__ == "__main__":
     root = tk.Tk()
