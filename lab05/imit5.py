@@ -1,153 +1,186 @@
 import tkinter as tk
-from tkinter import font as tkfont
+from tkinter import ttk
 import random
-import time
+import math
 
-class SimpleLCG:
-    def __init__(self, seed=None):
-        # Начальные данные согласно заданию
-        self.state = seed if seed else int(time.time())
-        self.m = 2**32
-        self.a = 1664525
-        self.c = 1
-
-    def next(self):
-        # Классическая формула ЛЦГ
-        self.state = (self.a * self.state + self.c) % self.m
-        # Приведение к интервалу [0, 1]
-        return self.state / self.m
-
-class MysticBallApp:
+class RouletteWithOracle:
     def __init__(self, root):
         self.root = root
-        self.root.title("Оракул Судьбы")
-        self.root.geometry("450x750")
-        self.root.resizable(False, False)
+        self.root.title("Рулетка")
+        self.root.geometry("1100x850")
+        self.root.configure(bg="#0a2e1f")
 
-        self.lcg = SimpleLCG()
-        self.mode = "magic"
+        self.balance = 1000
+        self.current_bet = None
+        self.spinning = False
+        self.angle = 0
 
-        self.preds_yes_no = ["ДА", "НЕТ"]
-        self.preds_magic = [
-            "Бесспорно", "Никаких сомнений", "Вероятнее всего",
-            "Пока не ясно", "Спроси позже", "НЕТ",
-            "Перспективы плохие", "Весьма сомнительно"
-        ]
+        self.reds = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
+        self.wheel_order = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20,
+                            14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26]
 
-        self.color_bg = "#0f0c29"
-        self.color_acc = "#00f2fe"
-        self.color_ball = "#1a1a2e"
+        style = ttk.Style()
+        style.configure("TNotebook", background="#051a12")
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(expand=True, fill="both")
 
-        self.setup_fonts()
-        self.create_widgets()
+        self.tab_game = tk.Frame(self.notebook, bg="#0a2e1f")
+        self.tab_yesno = tk.Frame(self.notebook, bg="#1a1a1a")
 
-    def setup_fonts(self):
-        try:
-            self.font_title = tkfont.Font(family="Georgia", size=20, weight="bold")
-            self.font_pred = tkfont.Font(family="Courier New", size=14, weight="bold")
-            self.font_btn = tkfont.Font(family="Verdana", size=10, weight="bold")
-        except:
-            self.font_title = ("Arial", 18, "bold")
-            self.font_pred = ("Consolas", 12, "bold")
-            self.font_btn = ("Arial", 10, "bold")
+        self.notebook.add(self.tab_game, text=" ИГРАТЬ ")
+        self.notebook.add(self.tab_yesno, text=" ДА / НЕТ ")
 
-    def create_widgets(self):
-        self.canvas_bg = tk.Canvas(self.root, bg=self.color_bg, highlightthickness=0)
-        self.canvas_bg.place(x=0, y=0, relwidth=1, relheight=1)
-        for i in range(750):
-            color = f"#{max(0, int(15 - i * 10 / 750)):02x}{max(0, int(12 - i * 8 / 750)):02x}{max(0, int(41 - i * 20 / 750)):02x}"
-            self.canvas_bg.create_line(0, i, 450, i, fill=color)
+        self.setup_game_ui()
+        self.setup_yesno_ui()
 
-        self.frame_modes = tk.Frame(self.root, bg=self.color_bg)
-        self.frame_modes.pack(pady=(20, 10))
+    def get_yes_no(self, p=0.5):
+        return "ДА" if random.random() < p else "НЕТ"
 
-        self.btn_mode_1 = tk.Button(self.frame_modes, text="ДА/НЕТ", command=lambda: self.set_mode("binary"),
-                                    relief=tk.FLAT, font=self.font_btn, width=10, bg="#1a1a3a", fg=self.color_acc)
-        self.btn_mode_1.pack(side=tk.LEFT, padx=5)
+    def setup_game_ui(self):
+        self.lbl_balance = tk.Label(self.tab_game, text=f"БАЛАНС: ${self.balance}", font=("Arial", 20, "bold"),
+                                    fg="#f1c40f", bg="#0a2e1f")
+        self.lbl_balance.pack(pady=10)
 
-        self.btn_mode_2 = tk.Button(self.frame_modes, text="MAGIC 8", command=lambda: self.set_mode("magic"),
-                                    relief=tk.FLAT, font=self.font_btn, width=10, bg=self.color_acc, fg=self.color_bg)
-        self.btn_mode_2.pack(side=tk.LEFT, padx=5)
+        main_area = tk.Frame(self.tab_game, bg="#0a2e1f")
+        main_area.pack(expand=True, fill=tk.BOTH)
 
-        tk.Label(self.root, text="ВВЕДИТЕ ВАШ ВОПРОС:", font=("Arial", 8, "bold"), fg=self.color_acc,
-                 bg=self.color_bg).pack(pady=(10, 0))
-        self.question_entry = tk.Entry(self.root, font=("Arial", 12), bg="#1a1a3a", fg="white",
-                                       insertbackground="white", relief=tk.FLAT, justify='center')
-        self.question_entry.pack(pady=5, padx=50, fill=tk.X)
+        self.canvas = tk.Canvas(main_area, width=450, height=450, bg="#0a2e1f", highlightthickness=0)
+        self.canvas.pack(side=tk.LEFT, padx=30)
 
-        self.ball_container = tk.Frame(self.root, width=320, height=320, bg=self.color_bg)
-        self.ball_container.pack(pady=20)
-        self.ball_container.pack_propagate(False)
+        self.table_frame = tk.Frame(main_area, bg="#1a4731", padx=10, pady=10, relief=tk.RAISED, border=3)
+        self.table_frame.pack(side=tk.RIGHT, padx=30)
+        self.create_betting_table()
 
-        self.ball_canvas = tk.Canvas(self.ball_container, width=300, height=300, bg=self.color_bg, highlightthickness=0)
-        self.ball_canvas.place(x=10, y=10)
-        self.ball_canvas.create_oval(10, 10, 290, 290, fill=self.color_ball, outline=self.color_acc, width=2)
-        self.ball_canvas.create_oval(50, 40, 120, 90, fill="#3a3a6d", outline="")
+        self.lbl_status = tk.Label(self.tab_game, text="СДЕЛАЙТЕ СТАВКУ", font=("Arial", 16, "bold"), bg="#0a2e1f",
+                                   fg="white")
+        self.lbl_status.pack(pady=10)
 
-        self.pred_text = tk.Text(self.ball_canvas, width=15, height=3, font=self.font_pred,
-                                 fg=self.color_ball, bg=self.color_ball, wrap=tk.WORD, relief=tk.FLAT,
-                                 state=tk.DISABLED)
-        self.pred_text.place(x=150, y=150, anchor=tk.CENTER)
-        self.pred_text.tag_configure("center", justify='center')
+        ctrls = tk.Frame(self.tab_game, bg="#051a12", pady=15)
+        ctrls.pack(fill=tk.X)
 
-        self.btn_predict = tk.Button(self.root, text="УЗНАТЬ СУДЬБУ", font=self.font_btn,
-                                     command=self.shake_and_predict,
-                                     bg="#242443", fg=self.color_acc, activebackground=self.color_acc, relief=tk.FLAT,
-                                     pady=15, padx=30)
-        self.btn_predict.pack(side=tk.BOTTOM, pady=40)
+        self.chip_var = tk.IntVar(value=10)
+        for v in [10, 50, 100, 500]:
+            tk.Radiobutton(ctrls, text=f"${v}", variable=self.chip_var, value=v, indicatoron=False, width=6).pack(
+                side=tk.LEFT, padx=5)
 
-    def set_mode(self, new_mode):
-        self.mode = new_mode
-        if self.mode == "binary":
-            self.btn_mode_1.config(fg=self.color_bg, bg=self.color_acc)
-            self.btn_mode_2.config(fg=self.color_acc, bg="#1a1a3a")
+        self.btn_spin = tk.Button(ctrls, text="КРУТИТЬ", font=("Arial", 14, "bold"), bg="#f1c40f", width=15,
+                                  command=self.start_spin)
+        self.btn_spin.pack(side=tk.RIGHT, padx=20)
+
+        self.draw_wheel(0)
+
+    def create_betting_table(self):
+        nums = [[3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
+                [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+                [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]]
+
+        tk.Button(self.table_frame, text="0", bg="green", fg="white", width=4, height=6,
+                  command=lambda: self.set_bet("num", 0)).grid(row=0, column=0, rowspan=3, sticky="nswe")
+        for r in range(3):
+            for c in range(12):
+                n = nums[r][c]
+                clr = "#e74c3c" if n in self.reds else "#2c3e50"
+                tk.Button(self.table_frame, text=str(n), bg=clr, fg="white", width=4, height=2,
+                          command=lambda num=n: self.set_bet("num", num)).grid(row=r, column=c + 1)
+
+        tk.Button(self.table_frame, text="RED", bg="#e74c3c", fg="white", height=2,
+                  command=lambda: self.set_bet("color", "red")).grid(row=3, column=1, columnspan=6, sticky="we")
+        tk.Button(self.table_frame, text="BLACK", bg="#2c3e50", fg="white", height=2,
+                  command=lambda: self.set_bet("color", "black")).grid(row=3, column=7, columnspan=6, sticky="we")
+
+    def set_bet(self, t, v):
+        if self.spinning: return
+        self.current_bet = (t, v)
+        self.lbl_status.config(text=f"Ставка на {v} (${self.chip_var.get()})", fg="#f1c40f")
+
+    def draw_wheel(self, angle_offset):
+        self.canvas.delete("w")
+        cx, cy, r = 225, 225, 190
+        step = 360 / 37
+        for i, num in enumerate(self.wheel_order):
+            start = (i * step) - angle_offset - 90 - (step / 2)
+            clr = "green" if num == 0 else ("#e74c3c" if num in self.reds else "#2c3e50")
+            self.canvas.create_arc(cx - r, cy - r, cx + r, cy + r, start=-start, extent=-step, fill=clr,
+                                   outline="white", tags="w")
+            rad = math.radians(start + step / 2)
+            self.canvas.create_text(cx + (r - 25) * math.cos(rad), cy + (r - 25) * math.sin(rad), text=str(num),
+                                    fill="white", font=("Arial", 8, "bold"), tags="w")
+        self.canvas.create_polygon(cx - 12, 0, cx + 12, 0, cx, 35, fill="yellow", outline="black")
+
+    # --- ИСПРАВЛЕННЫЙ МЕТОД ВЫБОРА ЧИСЛА ---
+    def start_spin(self):
+        if self.spinning or not self.current_bet: return
+        amt = self.chip_var.get()
+        if self.balance < amt: return
+
+        self.balance -= amt
+        self.lbl_balance.config(text=f"БАЛАНС: ${self.balance}")
+        self.spinning = True
+        self.btn_spin.config(state=tk.DISABLED)
+        self.angle = 0
+
+        # ПРИНЦИП КУМУЛЯТИВНОЙ ВЕРОЯТНОСТИ
+        m = len(self.wheel_order)
+        p_i = 1.0 / m                # Вероятность каждого сектора (1/37)
+        alpha = random.random()      # Случайное число от 0 до 1
+        cumulative_p = 0.0
+        win_num = self.wheel_order[-1] # Дефолтное значение
+
+        for k in range(m):
+            cumulative_p += p_i
+            if alpha < cumulative_p:
+                win_num = self.wheel_order[k]
+                break
+
+        win_idx = self.wheel_order.index(win_num)
+        target_stop = win_idx * (360 / 37)
+        total_dist = (360 * 5) + target_stop
+
+        self.animate(0, total_dist, win_num)
+
+    def animate(self, curr, total, win_num):
+        if curr < total:
+            step = max(0.5, (total - curr) / 20)
+            self.angle = (self.angle + step) % 360
+            self.draw_wheel(self.angle)
+            self.root.after(20, lambda: self.animate(curr + step, total, win_num))
         else:
-            self.btn_mode_2.config(fg=self.color_bg, bg=self.color_acc)
-            self.btn_mode_1.config(fg=self.color_acc, bg="#1a1a3a")
+            self.spinning = False
+            self.btn_spin.config(state=tk.NORMAL)
+            self.check_result(win_num)
 
-    def shake_and_predict(self):
-        self.btn_predict.config(state=tk.DISABLED)
-        self.pred_text.config(state=tk.NORMAL)
-        self.pred_text.delete('1.0', tk.END)
-        self.pred_text.config(state=tk.DISABLED, fg=self.color_ball)
-        self.shake_ball(15)
+    def check_result(self, win_num):
+        b_type, b_val = self.current_bet
+        win_clr = "green" if win_num == 0 else ("red" if win_num in self.reds else "black")
 
-    def shake_ball(self, count):
-        if count > 0:
-            dx, dy = random.randint(-10, 10), random.randint(-10, 10)
-            self.ball_canvas.place(x=10 + dx, y=10 + dy)
-            self.root.after(30, lambda: self.shake_ball(count - 1))
+        payout = 0
+        if b_type == "num" and b_val == win_num:
+            payout = self.chip_var.get() * 36
+        elif b_type == "color" and b_val == win_clr:
+            payout = self.chip_var.get() * 2
+
+        if payout > 0:
+            self.balance += payout
+            self.lbl_status.config(text=f"ВЫИГРЫШ! Выпало {win_num}. +${payout}", fg="#2ecc71")
         else:
-            self.ball_canvas.place(x=10, y=10)
-            self.ball_logic()
-            self.btn_predict.config(state=tk.NORMAL)
+            self.lbl_status.config(text=f"ПРОИГРЫШ! Выпало {win_num}", fg="#e74c3c")
+        self.lbl_balance.config(text=f"БАЛАНС: ${self.balance}")
+        self.current_bet = None
 
-    def ball_logic(self):
-        question = self.question_entry.get().lower()
+    def setup_yesno_ui(self):
+        tk.Label(self.tab_yesno, text="МАГИЧЕСКИЙ ОРАКУЛ", font=("Arial", 26, "bold"), fg="#9b59b6", bg="#1a1a1a").pack(
+            pady=60)
+        self.lbl_yesno_res = tk.Label(self.tab_yesno, text="???", font=("Arial", 60, "bold"), fg="white", bg="#1a1a1a")
+        self.lbl_yesno_res.pack(pady=40)
+        tk.Button(self.tab_yesno, text="УЗНАТЬ СУДЬБУ", font=("Arial", 16, "bold"), bg="#8e44ad", fg="white",
+                  width=20, height=2, command=self.update_yesno).pack(pady=20)
 
-        if "радмир ренатович" in question:
-            answer = "БЕССУМНЕННО ДА" if self.mode == "magic" else "ДА"
-        else:
-            current_list = self.preds_yes_no if self.mode == "binary" else self.preds_magic
-            m = len(current_list)
-            pi = 1.0 / m
-            alpha = self.lcg.next()
-            k = int(alpha / pi)
-            if k >= m: k = m - 1
-            answer = current_list[k]
-
-        self.animate_text(answer)
-
-    def animate_text(self, text):
-        self.pred_text.config(state=tk.NORMAL)
-        self.pred_text.insert('1.0', text.upper())
-        self.pred_text.tag_add("center", "1.0", "end")
-        colors = ["#1a1a2e", "#00f2fe", "#ffffff"]
-        for i, col in enumerate(colors):
-            self.root.after(i * 150, lambda c=col: self.pred_text.config(fg=c))
-        self.pred_text.config(state=tk.DISABLED)
+    def update_yesno(self):
+        result = self.get_yes_no()
+        color = "#2ecc71" if result == "ДА" else "#e74c3c"
+        self.lbl_yesno_res.config(text=result, fg=color)
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = MysticBallApp(root)
+    app = RouletteWithOracle(root)
     root.mainloop()
