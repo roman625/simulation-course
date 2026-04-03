@@ -107,7 +107,7 @@ class RouletteWithOracle:
                                     fill="white", font=("Arial", 8, "bold"), tags="w")
         self.canvas.create_polygon(cx - 12, 0, cx + 12, 0, cx, 35, fill="yellow", outline="black")
 
-    # --- ИСПРАВЛЕННЫЙ МЕТОД ВЫБОРА ЧИСЛА ---
+    #  ИСПРАВЛЕННЫЙ МЕТОД ВЫБОРА ЧИСЛА 
     def start_spin(self):
         if self.spinning or not self.current_bet: return
         amt = self.chip_var.get()
@@ -121,10 +121,10 @@ class RouletteWithOracle:
 
         # ПРИНЦИП КУМУЛЯТИВНОЙ ВЕРОЯТНОСТИ
         m = len(self.wheel_order)
-        p_i = 1.0 / m                # Вероятность каждого сектора (1/37)
-        alpha = random.random()      # Случайное число от 0 до 1
+        p_i = 1.0 / m                
+        alpha = random.random()      
         cumulative_p = 0.0
-        win_num = self.wheel_order[-1] # Дефолтное значение
+        win_num = self.wheel_order[-1] 
 
         for k in range(m):
             cumulative_p += p_i
