@@ -107,7 +107,7 @@ class RouletteWithOracle:
                                     fill="white", font=("Arial", 8, "bold"), tags="w")
         self.canvas.create_polygon(cx - 12, 0, cx + 12, 0, cx, 35, fill="yellow", outline="black")
 
-    #  ИСПРАВЛЕННЫЙ МЕТОД ВЫБОРА ЧИСЛА 
+
     def start_spin(self):
         if self.spinning or not self.current_bet: return
         amt = self.chip_var.get()
