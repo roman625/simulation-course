@@ -103,12 +103,12 @@ class WeatherContinuousMarkov(ctk.CTk):
         btn_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         btn_frame.pack(fill="x", padx=20, pady=(20, 10))
 
-        self.start_btn = ctk.CTkButton(btn_frame, text="▶ Запустить", command=self.toggle_simulation,
+        self.start_btn = ctk.CTkButton(btn_frame, text="Запустить", command=self.toggle_simulation,
                                        fg_color="#2ecc71", hover_color="#27ae60", font=("Arial", 14, "bold"), height=45,
                                        corner_radius=10)
         self.start_btn.pack(fill="x")
 
-        self.reset_btn = ctk.CTkButton(btn_frame, text="↺ Сбросить", command=self.reset_sim,
+        self.reset_btn = ctk.CTkButton(btn_frame, text="Сбросить", command=self.reset_sim,
                                        fg_color="#e74c3c", hover_color="#c0392b", font=("Arial", 14, "bold"), height=45,
                                        corner_radius=10)
         self.reset_btn.pack(fill="x", pady=(10, 0))
