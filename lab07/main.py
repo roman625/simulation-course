@@ -38,7 +38,7 @@ class WeatherContinuousMarkov(ctk.CTk):
         self.history_states = [1]
         self.time_spent = {1: 0.0, 2: 0.0, 3: 0.0}
 
-        self.states = {1: "Ясно ☀️", 2: "Облачно ☁️", 3: "Пасмурно 🌧️"}
+        self.states = {1: "Ясно", 2: "Облачно", 3: "Пасмурно"}
         self.current_state = 1
         self.csv_file = "weather_analysis.csv"
 
@@ -59,7 +59,7 @@ class WeatherContinuousMarkov(ctk.CTk):
         self.sidebar.grid(row=0, column=0, sticky="nsew", padx=(15, 0), pady=15)
         self.sidebar.grid_rowconfigure(3, weight=1)  # Растягиваем пустое место
 
-        ctk.CTkLabel(self.sidebar, text="🌦️ Марковская модель", font=("Arial", 20, "bold")).pack(pady=(20, 10))
+        ctk.CTkLabel(self.sidebar, text="Марковская модель", font=("Arial", 20, "bold")).pack(pady=(20, 10))
 
         matrix_card = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         matrix_card.pack(fill="x", padx=15, pady=(10, 15))
@@ -168,12 +168,12 @@ class WeatherContinuousMarkov(ctk.CTk):
                 tk.messagebox.showerror("Ошибка", "Введите корректные числа в матрицу")
                 return
             self.running = True
-            self.start_btn.configure(text="⏸ Остановить", fg_color="#f39c12", hover_color="#d68910")
+            self.start_btn.configure(text="Остановить", fg_color="#f39c12", hover_color="#d68910")
             self.status_dot.configure(text_color="#2ecc71")
             threading.Thread(target=self.simulation_loop, daemon=True).start()
         else:
             self.running = False
-            self.start_btn.configure(text="▶ Запустить", fg_color="#2ecc71", hover_color="#27ae60")
+            self.start_btn.configure(text="Запустить", fg_color="#2ecc71", hover_color="#27ae60")
             self.status_dot.configure(text_color="#e74c3c")
 
     def simulation_loop(self):
@@ -271,7 +271,7 @@ class WeatherContinuousMarkov(ctk.CTk):
         self.time_label.configure(text="Модельное время: 0.00")
         self.state_label.configure(text="ОЖИДАНИЕ", text_color="#bdc3c7")
         self.status_dot.configure(text_color="#95a5a6")
-        self.start_btn.configure(text="▶ Запустить", fg_color="#2ecc71", hover_color="#27ae60")
+        self.start_btn.configure(text="Запустить", fg_color="#2ecc71", hover_color="#27ae60")
 
         self.ax_line.clear()
         self.ax_bar.clear()
