@@ -41,7 +41,7 @@ class WeatherContinuousMarkov(ctk.CTk):
 
         self.states = {1: "Ясно ☀️", 2: "Облачно ☁️", 3: "Пасмурно 🌧️"}
         self.current_state = 1
-        self.csv_file = "lab07/weather_analysis.csv"
+        self.csv_file = "weather_analysis.csv"
 
         self.reset_csv()
         self.setup_ui()
