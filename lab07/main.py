@@ -11,7 +11,6 @@ import time
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
-# Глобальная настройка matplotlib под тёмный интерфейс
 plt.rcParams.update({
     'figure.facecolor': '#1e1e1e',
     'axes.facecolor': '#2a2a2a',
@@ -56,14 +55,12 @@ class WeatherContinuousMarkov(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # --- SIDEBAR ---
         self.sidebar = ctk.CTkFrame(self, width=320, corner_radius=16, fg_color="#262626")
         self.sidebar.grid(row=0, column=0, sticky="nsew", padx=(15, 0), pady=15)
         self.sidebar.grid_rowconfigure(3, weight=1)  # Растягиваем пустое место
 
         ctk.CTkLabel(self.sidebar, text="🌦️ Марковская модель", font=("Arial", 20, "bold")).pack(pady=(20, 10))
 
-        # Матрица в карточке
         matrix_card = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         matrix_card.pack(fill="x", padx=15, pady=(10, 15))
 
@@ -91,7 +88,6 @@ class WeatherContinuousMarkov(ctk.CTk):
                 row_entries.append(e)
             self.matrix_inputs.append(row_entries)
 
-        # Ползунок скорости
         speed_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         speed_frame.pack(fill="x", padx=20, pady=(30, 5))
         ctk.CTkLabel(speed_frame, text="Скорость симуляции:", font=("Arial", 13)).pack(anchor="w")
@@ -104,7 +100,6 @@ class WeatherContinuousMarkov(ctk.CTk):
         self.speed_slider.pack(fill="x", pady=(8, 5))
         self.speed_slider.configure(command=lambda v: self.speed_val_label.configure(text=f"{float(v):.1f}x"))
 
-        # Кнопки
         btn_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         btn_frame.pack(fill="x", padx=20, pady=(20, 10))
 
@@ -118,12 +113,10 @@ class WeatherContinuousMarkov(ctk.CTk):
                                        corner_radius=10)
         self.reset_btn.pack(fill="x", pady=(10, 0))
 
-        # --- MAIN CONTENT ---
         self.main_content = ctk.CTkFrame(self, fg_color="transparent")
         self.main_content.grid(row=0, column=1, sticky="nsew", padx=15, pady=15)
         self.main_content.grid_rowconfigure(1, weight=1)
 
-        # Информационная панель
         self.info_card = ctk.CTkFrame(self.main_content, fg_color="#262626", corner_radius=12)
         self.info_card.grid(row=0, column=0, sticky="ew", pady=(0, 15))
 
@@ -137,7 +130,6 @@ class WeatherContinuousMarkov(ctk.CTk):
                                         text_color="#bdc3c7")
         self.state_label.pack(side="right", padx=30, pady=20)
 
-        # Графики
         self.fig, (self.ax_line, self.ax_bar) = plt.subplots(2, 1, figsize=(10, 8))
         self.fig.subplots_adjust(left=0.12, bottom=0.08, right=0.96, top=0.94, hspace=0.35)
 
@@ -254,7 +246,6 @@ class WeatherContinuousMarkov(ctk.CTk):
         self.ax_bar.grid(True, axis='y', linestyle='--', alpha=0.3)
         self.ax_bar.legend(facecolor='#2a2a2a', labelcolor='white', edgecolor='#4a4a4a')
 
-        # Подписи значений над столбцами
         for rect in rects1:
             height = rect.get_height()
             if height > 0.01:
